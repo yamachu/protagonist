@@ -14,11 +14,12 @@ using namespace refract;
 
 struct v8Wrapper {
     bool sourcemap;
+    Local<Context> context;
     Local<Value> v8_value;
 
-    v8Wrapper() : sourcemap(false){};
+    v8Wrapper(Local<Context> context) : sourcemap(false), context(context){};
 
-    v8Wrapper(bool sourcemap) : sourcemap(sourcemap){};
+    v8Wrapper(Local<Context> context, bool sourcemap) : sourcemap(sourcemap), context(context){};
 
     void operator()(const NullElement& e);
     void operator()(const StringElement& e);
@@ -50,15 +51,16 @@ Local<String> v8_string(const std::string& value)
     return Nan::New<String>(value.c_str()).ToLocalChecked();
 }
 
-Local<Value> ElementToObject(const IElement* e, bool sourcemap)
+Local<Value> ElementToObject(Local<Context> context, const IElement* e, bool sourcemap)
 {
-    v8Wrapper f(sourcemap);
+    v8Wrapper f(context, sourcemap);
     Visitor v(f);
     e->content(v);
     return f.v8_value;
 }
 
-Local<Object> v8ElementCollection(const InfoElements& collection,
+Local<Object> v8ElementCollection(Local<Context> context,
+                                  const InfoElements& collection,
                                   bool sourcemap)
 {
     Local<Object> result = Nan::New<Object>();
@@ -76,21 +78,21 @@ Local<Object> v8ElementCollection(const InfoElements& collection,
         key = v8_string(el.first);
 
         if (el.second) {
-            value = ElementToObject(el.second.get(), sourcemap);
+            value = ElementToObject(context, el.second.get(), sourcemap);
         }
 
-        result->Set(key, value);
+        result->Set(context, key, value);
     }
 
     return result;
 }
 
-Local<Object> v8Element(const IElement& e, bool sourcemap)
+Local<Object> v8Element(Local<Context> context, const IElement& e, bool sourcemap)
 {
     Local<Object> res = Nan::New<Object>();
-    res->Set(v8_string("element"), v8_string(e.element()));
+    res->Set(context, v8_string("element"), v8_string(e.element()));
     if (e.meta().size() > 0) {
-        res->Set(v8_string("meta"), v8ElementCollection(e.meta(), sourcemap));
+        res->Set(context, v8_string("meta"), v8ElementCollection(context, e.meta(), sourcemap));
     }
 
     if (e.element() == "annotation") {
@@ -98,12 +100,12 @@ Local<Object> v8Element(const IElement& e, bool sourcemap)
     }
 
     if (e.attributes().size() > 0) {
-        Local<Object> attrs = v8ElementCollection(e.attributes(), sourcemap);
+        Local<Object> attrs = v8ElementCollection(context, e.attributes(), sourcemap);
         MaybeLocal<Array> maybeProps = Nan::GetOwnPropertyNames(attrs);
         if (!maybeProps.IsEmpty()) {
             Local<Array> props = maybeProps.ToLocalChecked();
             if (props->Length() > 0) {
-                res->Set(v8_string("attributes"), attrs);
+                res->Set(context, v8_string("attributes"), attrs);
             }
         }
     }
@@ -111,56 +113,56 @@ Local<Object> v8Element(const IElement& e, bool sourcemap)
 }
 
 template <typename T>
-Local<Object> v8ValueList(const T& e, bool sourcemap)
+Local<Object> v8ValueList(Local<Context> context, const T& e, bool sourcemap)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
 
     if (!e.empty()) {
         size_t i = 0;
         Local<Array> array = Nan::New<Array>();
 
         for (const auto& el : e.get()) {
-            array->Set(i, ElementToObject(el.get(), sourcemap));
+            array->Set(context, i, ElementToObject(context, el.get(), sourcemap));
             ++i;
         }
 
-        obj->Set(v8_string("content"), array);
+        obj->Set(context, v8_string("content"), array);
     }
 
     return obj;
 }
 
-Local<Value> v8RefElement(const RefElement& e, bool sourcemap)
+Local<Value> v8RefElement(Local<Context> context, const RefElement& e, bool sourcemap)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
 
-    obj->Set(v8_string("content"), v8_string(e.get().symbol()));
+    obj->Set(context, v8_string("content"), v8_string(e.get().symbol()));
 
     return obj;
 }
 
 void v8Wrapper::operator()(const NullElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
-    obj->Set(v8_string("content"), Nan::Null());
+    Local<Object> obj = v8Element(context, e, sourcemap);
+    obj->Set(context, v8_string("content"), Nan::Null());
     v8_value = obj;
 }
 
 void v8Wrapper::operator()(const StringElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
     if (!e.empty()) {
-        obj->Set(v8_string("content"), v8_string(e.get().get()));
+        obj->Set(context, v8_string("content"), v8_string(e.get().get()));
     }
     v8_value = obj;
 }
 
 void v8Wrapper::operator()(const NumberElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
     if (!e.empty()) {
         Nan::JSON NanJSON;
-        obj->Set(v8_string("content"),
+        obj->Set(context, v8_string("content"),
                  NanJSON.Parse(v8_string(e.get().get())).ToLocalChecked());
     }
     v8_value = obj;
@@ -168,9 +170,9 @@ void v8Wrapper::operator()(const NumberElement& e)
 
 void v8Wrapper::operator()(const BooleanElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
     if (!e.empty()) {
-        obj->Set(v8_string("content"), Nan::New<Boolean>(e.get()));
+        obj->Set(context, v8_string("content"), Nan::New<Boolean>(e.get()));
     }
     v8_value = obj;
 }
@@ -182,17 +184,17 @@ void v8Wrapper::operator()(const MemberElement& e)
     Local<Value> value;
 
     if (e.get().key()) {
-        key = ElementToObject(e.get().key(), sourcemap);
+        key = ElementToObject(context, e.get().key(), sourcemap);
     }
 
     if (e.get().value()) {
-        value = ElementToObject(e.get().value(), sourcemap);
+        value = ElementToObject(context, e.get().value(), sourcemap);
     }
 
-    Local<Object> obj = v8Element(e, sourcemap);
-    content->Set(v8_string("key"), key);
-    content->Set(v8_string("value"), value);
-    obj->Set(v8_string("content"), content);
+    Local<Object> obj = v8Element(context, e, sourcemap);
+    content->Set(context, v8_string("key"), key);
+    content->Set(context, v8_string("value"), value);
+    obj->Set(context, v8_string("content"), content);
     v8_value = obj;
 }
 
@@ -207,26 +209,26 @@ void v8Wrapper::operator()(const ArrayElement& e)
         size_t i = 0;
         for (const auto& el : val->get()) {
             if (el) {
-                array->Set(i, ElementToObject(el.get(), sourcemap));
+                array->Set(context, i, ElementToObject(context, el.get(), sourcemap));
             }
             ++i;
         }
     }
 
-    Local<Object> res = v8Element(e, sourcemap);
+    Local<Object> res = v8Element(context, e, sourcemap);
     if (!e.empty()) {
-        res->Set(v8_string("content"), array);
+        res->Set(context, v8_string("content"), array);
     }
     v8_value = res;
 }
 
 void v8Wrapper::operator()(const EnumElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
 
     if (!e.empty()) {
-        obj->Set(v8_string("content"),
-                 ElementToObject(e.get().value(), sourcemap));
+        obj->Set(context, v8_string("content"),
+                 ElementToObject(context, e.get().value(), sourcemap));
     }
 
     v8_value = obj;
@@ -239,26 +241,26 @@ void v8Wrapper::operator()(const ExtendElement& e)
 
 void v8Wrapper::operator()(const OptionElement& e)
 {
-    v8_value = v8ValueList(e, sourcemap);
+    v8_value = v8ValueList(context, e, sourcemap);
 }
 
 void v8Wrapper::operator()(const SelectElement& e)
 {
-    v8_value = v8ValueList(e, sourcemap);
+    v8_value = v8ValueList(context, e, sourcemap);
 }
 
 void v8Wrapper::operator()(const RefElement& e)
 {
-    v8_value = v8RefElement(e, sourcemap);
+    v8_value = v8RefElement(context, e, sourcemap);
 }
 
 void v8Wrapper::operator()(const HolderElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
 
     if (!e.empty()) {
-        obj->Set(v8_string("content"),
-                 ElementToObject(e.get().data(), sourcemap));
+        obj->Set(context, v8_string("content"),
+                 ElementToObject(context, e.get().data(), sourcemap));
     }
 
     v8_value = obj;
@@ -266,18 +268,18 @@ void v8Wrapper::operator()(const HolderElement& e)
 
 void v8Wrapper::operator()(const ObjectElement& e)
 {
-    Local<Object> obj = v8Element(e, sourcemap);
+    Local<Object> obj = v8Element(context, e, sourcemap);
 
     if (!e.empty() && !e.get().empty()) {
         Local<Array> array = Nan::New<Array>();
         size_t i = 0;
 
         for (const auto& el : e.get()) {
-            array->Set(i, ElementToObject(el.get(), sourcemap));
+            array->Set(context, i, ElementToObject(context, el.get(), sourcemap));
             ++i;
         }
 
-        obj->Set(v8_string("content"), array);
+        obj->Set(context, v8_string("content"), array);
     }
 
     v8_value = obj;
@@ -288,7 +290,7 @@ Local<Value> refract2v8(const IElement* res,
 {
     assert(res);
 
-    v8Wrapper f(sourceMaps);
+    v8Wrapper f(context, sourceMaps);
     Visitor v(f);
     res->content(v);
 
@@ -310,14 +312,15 @@ Local<Value> annotations2v8(const IElement* res)
         for (std::vector<const IElement*>::const_iterator it = elements.begin();
              it != elements.end(); ++i, ++it) {
             if (*it) {
-                array->Set(i, ElementToObject(*it, true));
+                array->Set(context, i, ElementToObject(context, *it, true));
             }
         }
 
         Local<Object> annotations = Nan::New<Object>();
-        annotations->Set(v8_string("element"),
+        annotations->Set(context,
+                         v8_string("element"),
                          v8_string(drafter::SerializeKey::ParseResult));
-        annotations->Set(v8_string("content"), array);
+        annotations->Set(context, v8_string("content"), array);
         return annotations;
     }
 
