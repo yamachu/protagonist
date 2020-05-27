@@ -53,7 +53,7 @@ NAN_METHOD(protagonist::ValidateSync) {
     }
 
     if (result) {
-        Local<Value> v8result = refract2v8(result, true);
+        Local<Value> v8result = refract2v8(context, result, true);
         drafter_free_result(result);
         info.GetReturnValue().Set(v8result);
     }

@@ -69,7 +69,7 @@ namespace
             }
 
             if (result) {
-                v8refract = refract2v8(result, options.serializeSourcemaps());
+                v8refract = refract2v8(Nan::GetCurrentContext(), result, options.serializeSourcemaps());
             }
 
             if (persistent) {

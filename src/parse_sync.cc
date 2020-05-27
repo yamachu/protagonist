@@ -60,7 +60,7 @@ NAN_METHOD(protagonist::ParseSync) {
         break;
     }
 
-    Local<Value> v8result = refract2v8(result, options.serializeSourcemaps());
+    Local<Value> v8result = refract2v8(context, result, options.serializeSourcemaps());
     drafter_free_result(result);
     info.GetReturnValue().Set(v8result);
 }

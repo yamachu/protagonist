@@ -68,7 +68,7 @@ namespace
             }
 
             if (result) {
-                v8refract = refract2v8(result, true);
+                v8refract = refract2v8(Nan::GetCurrentContext(), result, true);
             }
 
             if (persistent) {
