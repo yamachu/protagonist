@@ -285,7 +285,8 @@ void v8Wrapper::operator()(const ObjectElement& e)
     v8_value = obj;
 }
 
-Local<Value> refract2v8(const IElement* res,
+Local<Value> refract2v8(Local<Context> context,
+                        const IElement* res,
                         bool sourceMaps)
 {
     assert(res);
@@ -297,7 +298,8 @@ Local<Value> refract2v8(const IElement* res,
     return f.v8_value;
 }
 
-Local<Value> annotations2v8(const IElement* res)
+Local<Value> annotations2v8(Local<Context> context,
+                            const IElement* res)
 {
     FilterVisitor filter(query::Element("annotation"));
     Iterate<Children> iterate(filter);
